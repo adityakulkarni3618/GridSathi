@@ -6,12 +6,14 @@ import KpiCards from "../components/KpiCards";
 import DemandChart from "../components/DemandChart";
 import BatteryStorageCard from "../components/BatteryStorageCard";
 import LiveIoTTelemetryTicker from "../components/LiveIoTTelemetryTicker";
+import MicrogridGisMap from "../components/MicrogridGisMap";
 import WeightSliders from "../components/WeightSliders";
 import ScheduleTable from "../components/ScheduleTable";
 import AnomalyAlertCard from "../components/AnomalyAlertCard";
 import ScenarioDrawer from "../components/ScenarioDrawer";
 import AuditLogModal from "../components/AuditLogModal";
 import ConfigModal from "../components/ConfigModal";
+import RoiPaybackModal from "../components/RoiPaybackModal";
 
 import {
   fetchDashboardData,
@@ -26,7 +28,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [isLoadingAction, setIsLoadingAction] = useState(false);
-  const [activeModal, setActiveModal] = useState(null); // 'audit', 'config', 'scenario', null
+  const [activeModal, setActiveModal] = useState(null); // 'audit', 'config', 'scenario', 'roi', null
   const [selectedBuilding, setSelectedBuilding] = useState("Main Campus Block A");
 
   const loadData = async () => {
@@ -97,7 +99,7 @@ export default function DashboardPage() {
           <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 flex items-center justify-center mx-auto animate-spin">
             ⚡
           </div>
-          <p className="text-xs font-semibold text-[var(--text-secondary)]">Initializing GridSathi Telemetry & BESS MILP Pipeline...</p>
+          <p className="text-xs font-semibold text-[var(--text-secondary)]">Initializing Open-Meteo & GridSathi BESS Pipeline...</p>
         </div>
       </div>
     );
@@ -112,6 +114,7 @@ export default function DashboardPage() {
         onOpenAuditLog={() => setActiveModal("audit")}
         onOpenConfig={() => setActiveModal("config")}
         onOpenScenario={() => setActiveModal("scenario")}
+        onOpenRoi={() => setActiveModal("roi")}
         isDemoLoading={isDemoLoading}
         activeScenario={data?.scenario?.active}
         selectedBuilding={selectedBuilding}
@@ -131,19 +134,22 @@ export default function DashboardPage() {
           dataFreshness={data?.data_freshness}
         />
 
-        {/* 3. BESS Battery Storage Card (Stretch Goal) */}
+        {/* 3. Interactive Microgrid GIS Infrastructure Map */}
+        <MicrogridGisMap selectedBuilding={selectedBuilding} />
+
+        {/* 4. BESS Battery Storage Card */}
         <BatteryStorageCard batterySeries={data?.battery_series} />
 
-        {/* 4. Interactive Demand & Solar Recharts Chart */}
+        {/* 5. Interactive Demand & Solar Recharts Chart */}
         <DemandChart chartData={data?.chart_series} />
 
-        {/* 5. MILP Weight Sliders */}
+        {/* 6. MILP Weight Sliders */}
         <WeightSliders
           weights={data?.config?.weights}
           onWeightsChange={handleWeightsChange}
         />
 
-        {/* 6. Smart Schedule Recommendations Table */}
+        {/* 7. Smart Schedule Recommendations Table */}
         <ScheduleTable
           schedule={data?.schedule}
           criticalLoads={data?.critical_loads}
@@ -151,7 +157,7 @@ export default function DashboardPage() {
           isLoadingAction={isLoadingAction}
         />
 
-        {/* 7. Anomaly Alerts Card */}
+        {/* 8. Anomaly Alerts Card */}
         <AnomalyAlertCard anomalies={data?.anomalies} />
 
       </main>
@@ -175,6 +181,12 @@ export default function DashboardPage() {
         onClose={() => setActiveModal(null)}
         configData={data?.config}
         onConfigUpdated={loadData}
+      />
+
+      <RoiPaybackModal
+        isOpen={activeModal === "roi"}
+        onClose={() => setActiveModal(null)}
+        kpis={data?.kpis}
       />
 
     </div>

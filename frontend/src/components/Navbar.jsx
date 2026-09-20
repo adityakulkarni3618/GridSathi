@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Zap, ShieldCheck, History, Sliders, Play, AlertTriangle, Sun, Moon, Building2, Download } from "lucide-react";
+import { Zap, ShieldCheck, History, Sliders, Play, AlertTriangle, Sun, Moon, Building2, Download, Calculator } from "lucide-react";
 import { useTheme } from "../lib/ThemeContext";
 
 export default function Navbar({
@@ -10,6 +10,7 @@ export default function Navbar({
   onOpenAuditLog,
   onOpenConfig,
   onOpenScenario,
+  onOpenRoi,
   isDemoLoading,
   activeScenario,
   selectedBuilding,
@@ -86,6 +87,16 @@ export default function Navbar({
           {/* Action Bar */}
           <div className="flex items-center space-x-2 sm:space-x-3">
             
+            {/* ROI Payback Calculator Button */}
+            <button
+              onClick={onOpenRoi}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[var(--bg-surface-elevated)] hover:bg-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-color)] transition-all"
+              title="Open ROI & CapEx Payback Calculator"
+            >
+              <Calculator className="w-3.5 h-3.5 text-emerald-500" />
+              <span className="hidden sm:inline">ROI Calculator</span>
+            </button>
+
             {/* Download PDF Report */}
             <button
               onClick={handleDownloadPDF}
@@ -93,7 +104,7 @@ export default function Navbar({
               title="Print / Export Executive PDF Audit Report"
             >
               <Download className="w-3.5 h-3.5 text-teal-500" />
-              <span>Export PDF Report</span>
+              <span>Export PDF</span>
             </button>
 
             {/* Theme Toggle Button */}
