@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, Zap, Sun, Battery, Server, ShieldCheck, Activity } from "lucide-react";
+import { MapPin, Zap, Sun, Battery, Server, Activity } from "lucide-react";
 
 export default function MicrogridGisMap({ selectedBuilding }) {
   const [activeNode, setActiveNode] = useState(null);
@@ -9,29 +9,32 @@ export default function MicrogridGisMap({ selectedBuilding }) {
   const nodes = [
     {
       id: "grid_substation",
-      name: "33kV Commercial Grid Substation",
+      name: "33kV Grid Substation",
+      fullName: "33kV Commercial Grid Substation",
       type: "GRID",
-      x: 20,
+      x: 22,
       y: 35,
       status: "STABLE",
-      metrics: "50.02 Hz • 230V • Normal Draw",
+      metrics: "50.02 Hz • 230V • Normal Grid Draw",
       icon: Zap,
       color: "blue"
     },
     {
       id: "solar_pv",
-      name: "Rooftop Solar PV Array (10 kW)",
+      name: "Rooftop Solar PV (10 kW)",
+      fullName: "Rooftop Solar PV Array (10 kW)",
       type: "SOLAR",
       x: 50,
-      y: 20,
+      y: 22,
       status: "GENERATING",
-      metrics: "7.2 kW Output • Pune Irradiance",
+      metrics: "7.2 kW Output • Open-Meteo Pune Irradiance",
       icon: Sun,
       color: "amber"
     },
     {
       id: "bess_storage",
-      name: "BESS Battery Storage (15 kWh)",
+      name: "BESS Storage (15 kWh)",
+      fullName: "BESS Battery Storage (15 kWh)",
       type: "BATTERY",
       x: 78,
       y: 35,
@@ -43,9 +46,10 @@ export default function MicrogridGisMap({ selectedBuilding }) {
     {
       id: "building_block",
       name: selectedBuilding || "Main Campus Block A",
+      fullName: selectedBuilding || "Main Campus Block A",
       type: "FACILITY",
-      x: 48,
-      y: 70,
+      x: 50,
+      y: 72,
       status: "MILP_OPTIMIZED",
       metrics: "32.8 kW Load • 4 Rescheduled Devices",
       icon: Server,
@@ -75,23 +79,23 @@ export default function MicrogridGisMap({ selectedBuilding }) {
           </div>
         </div>
 
-        <div className="text-xs font-mono text-[var(--text-muted)] bg-[var(--bg-surface-elevated)] px-3 py-1.5 rounded-xl border border-[var(--border-color)] flex items-center space-x-2">
+        <div className="text-xs font-mono text-[var(--text-muted)] bg-[var(--bg-surface-elevated)] px-3 py-1.5 rounded-xl border border-[var(--border-color)] flex items-center space-x-2 self-start sm:self-auto">
           <Activity className="w-3.5 h-3.5 text-emerald-500 animate-spin" />
           <span>Nodes Online: 4/4</span>
         </div>
       </div>
 
       {/* SVG Canvas Map */}
-      <div className="relative w-full h-72 sm:h-80 bg-[var(--bg-surface-elevated)] rounded-2xl border border-[var(--border-color)] overflow-hidden p-4">
+      <div className="relative w-full h-80 sm:h-96 bg-[var(--bg-surface-elevated)] rounded-2xl border border-[var(--border-color)] overflow-hidden p-4">
         
         {/* Animated Power Flow Lines */}
-        <svg className="absolute inset-0 w-full h-full pointer-events-none stroke-current">
+        <svg className="absolute inset-0 w-full h-full pointer-events-none">
           {/* Substation -> Building */}
-          <line x1="20%" y1="35%" x2="48%" y2="70%" stroke="#3b82f6" strokeWidth="2" strokeDasharray="6 6" className="animate-pulse" />
+          <line x1="22%" y1="35%" x2="50%" y2="72%" stroke="#3b82f6" strokeWidth="2.5" strokeDasharray="6 6" className="animate-pulse" />
           {/* Solar -> Building */}
-          <line x1="50%" y1="20%" x2="48%" y2="70%" stroke="#f59e0b" strokeWidth="2.5" />
+          <line x1="50%" y1="22%" x2="50%" y2="72%" stroke="#f59e0b" strokeWidth="3" />
           {/* BESS -> Building */}
-          <line x1="78%" y1="35%" x2="48%" y2="70%" stroke="#14b8a6" strokeWidth="2" strokeDasharray="4 4" />
+          <line x1="78%" y1="35%" x2="50%" y2="72%" stroke="#14b8a6" strokeWidth="2.5" strokeDasharray="4 4" />
         </svg>
 
         {/* Nodes */}
@@ -108,13 +112,13 @@ export default function MicrogridGisMap({ selectedBuilding }) {
               }`}
               style={{ left: `${node.x}%`, top: `${node.y}%` }}
             >
-              <div className={`p-3 rounded-2xl bg-[var(--bg-surface)] border-2 flex items-center space-x-2 shadow-xl ${
+              <div className={`p-2.5 sm:p-3 rounded-2xl bg-[var(--bg-surface)] border-2 flex items-center space-x-2.5 shadow-xl transition-all ${
                 node.color === "emerald" ? "border-emerald-500 shadow-emerald-500/20" :
                 node.color === "amber" ? "border-amber-500 shadow-amber-500/20" :
                 node.color === "teal" ? "border-teal-500 shadow-teal-500/20" :
                 "border-blue-500 shadow-blue-500/20"
               }`}>
-                <div className={`p-2 rounded-xl ${
+                <div className={`p-2 rounded-xl flex-shrink-0 ${
                   node.color === "emerald" ? "bg-emerald-500/20 text-emerald-500" :
                   node.color === "amber" ? "bg-amber-500/20 text-amber-500" :
                   node.color === "teal" ? "bg-teal-500/20 text-teal-500" :
@@ -122,20 +126,20 @@ export default function MicrogridGisMap({ selectedBuilding }) {
                 }`}>
                   <Icon className="w-5 h-5" />
                 </div>
-                <div className="hidden sm:block text-left">
-                  <div className="text-xs font-extrabold text-[var(--text-primary)] leading-tight">{node.name}</div>
-                  <div className="text-[10px] font-mono text-[var(--text-muted)] mt-0.5">{node.status}</div>
+                <div className="text-left max-w-[130px] sm:max-w-[180px]">
+                  <div className="text-xs font-black text-[var(--text-primary)] leading-tight truncate">{node.name}</div>
+                  <div className="text-[10px] font-mono text-[var(--text-muted)] mt-0.5 truncate">{node.status}</div>
                 </div>
               </div>
             </div>
           );
         })}
 
-        {/* Floating Active Node Drawer */}
+        {/* Floating Active Node Details Drawer */}
         {activeNode && (
           <div className="absolute bottom-3 left-3 right-3 bg-[var(--bg-surface)] p-3 rounded-xl border border-[var(--border-color)] shadow-2xl flex items-center justify-between text-xs animate-in slide-in-from-bottom">
             <div>
-              <span className="font-bold text-[var(--text-primary)]">{activeNode.name}: </span>
+              <span className="font-bold text-[var(--text-primary)]">{activeNode.fullName}: </span>
               <span className="font-mono text-emerald-500">{activeNode.metrics}</span>
             </div>
             <button
