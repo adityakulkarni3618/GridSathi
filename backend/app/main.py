@@ -31,7 +31,6 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    allow_headers=["*"],
 )
 
 # Global State Container
@@ -177,7 +176,6 @@ async def websocket_telemetry_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # Emit live telemetry packet every 2 seconds
             base_kw = 32.5 + random.uniform(-1.8, 2.2)
             grid_hz = 50.0 + random.uniform(-0.04, 0.04)
             grid_v = 230.0 + random.uniform(-2.5, 2.5)
