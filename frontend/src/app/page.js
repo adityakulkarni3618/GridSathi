@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import KpiCards from "../components/KpiCards";
 import DemandChart from "../components/DemandChart";
+import BatteryStorageCard from "../components/BatteryStorageCard";
+import LiveIoTTelemetryTicker from "../components/LiveIoTTelemetryTicker";
 import WeightSliders from "../components/WeightSliders";
 import ScheduleTable from "../components/ScheduleTable";
 import AnomalyAlertCard from "../components/AnomalyAlertCard";
@@ -25,6 +27,7 @@ export default function DashboardPage() {
   const [isDemoLoading, setIsDemoLoading] = useState(false);
   const [isLoadingAction, setIsLoadingAction] = useState(false);
   const [activeModal, setActiveModal] = useState(null); // 'audit', 'config', 'scenario', null
+  const [selectedBuilding, setSelectedBuilding] = useState("Main Campus Block A");
 
   const loadData = async () => {
     try {
@@ -94,7 +97,7 @@ export default function DashboardPage() {
           <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-500 flex items-center justify-center mx-auto animate-spin">
             ⚡
           </div>
-          <p className="text-xs font-semibold text-[var(--text-secondary)]">Initializing GridSathi Telemetry & ML Forecast...</p>
+          <p className="text-xs font-semibold text-[var(--text-secondary)]">Initializing GridSathi Telemetry & BESS MILP Pipeline...</p>
         </div>
       </div>
     );
@@ -111,28 +114,36 @@ export default function DashboardPage() {
         onOpenScenario={() => setActiveModal("scenario")}
         isDemoLoading={isDemoLoading}
         activeScenario={data?.scenario?.active}
+        selectedBuilding={selectedBuilding}
+        onBuildingSelect={setSelectedBuilding}
       />
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
         
-        {/* 1. KPI Cards */}
+        {/* 1. Live IoT Telemetry Bar */}
+        <LiveIoTTelemetryTicker />
+
+        {/* 2. KPI Summary Cards */}
         <KpiCards
           kpis={data?.kpis}
           forecastMetrics={data?.forecast_metrics}
           dataFreshness={data?.data_freshness}
         />
 
-        {/* 2. Interactive Demand & Solar Chart */}
+        {/* 3. BESS Battery Storage Card (Stretch Goal) */}
+        <BatteryStorageCard batterySeries={data?.battery_series} />
+
+        {/* 4. Interactive Demand & Solar Recharts Chart */}
         <DemandChart chartData={data?.chart_series} />
 
-        {/* 3. MILP Weight Sliders */}
+        {/* 5. MILP Weight Sliders */}
         <WeightSliders
           weights={data?.config?.weights}
           onWeightsChange={handleWeightsChange}
         />
 
-        {/* 4. Smart Schedule Recommendations Table */}
+        {/* 6. Smart Schedule Recommendations Table */}
         <ScheduleTable
           schedule={data?.schedule}
           criticalLoads={data?.critical_loads}
@@ -140,7 +151,7 @@ export default function DashboardPage() {
           isLoadingAction={isLoadingAction}
         />
 
-        {/* 5. Anomaly Alerts Card */}
+        {/* 7. Anomaly Alerts Card */}
         <AnomalyAlertCard anomalies={data?.anomalies} />
 
       </main>

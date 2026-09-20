@@ -18,11 +18,15 @@ class SmartDemandOptimizer:
         weight_cost: float = 0.4,
         weight_peak: float = 0.4,
         weight_carbon: float = 0.2,
-        approved_load_ids: List[str] = None # Loads approved by user
+        approved_load_ids: List[str] = None, # Loads approved by user
+        battery_capacity_kwh: float = config.DEFAULT_BATTERY_CAPACITY_KWH,
+        battery_max_power_kw: float = config.DEFAULT_BATTERY_MAX_POWER_KW,
+        battery_efficiency: float = config.DEFAULT_BATTERY_EFFICIENCY
     ) -> Dict[str, Any]:
         """
         Formulate and solve MILP optimization problem using PuLP.
-        Determines optimal start times for flexible loads to minimize cost, peak demand, and carbon emissions.
+        Determines optimal start times for flexible loads AND 24h battery charge/discharge schedule
+        to minimize cost, peak demand, and carbon emissions.
         """
         if approved_load_ids is None:
             approved_load_ids = [load['id'] for load in flexible_loads]
@@ -31,14 +35,13 @@ class SmartDemandOptimizer:
         
         hours = list(range(24))
         
-        # Binary Decision Variables: x[i, t] = 1 if flexible load i starts at hour t
+        # 1. Binary Decision Variables for Flexible Loads: x[i, t] = 1 if load i starts at hour t
         x_vars = {}
         for load in flexible_loads:
             load_id = load['id']
             start_min = load['allowed_start']
             start_max = min(23, load['allowed_end'] - load['duration_hours'])
             
-            # Start max must be >= start_min
             if start_max < start_min:
                 start_max = start_min
                 
@@ -48,13 +51,18 @@ class SmartDemandOptimizer:
                 else:
                     x_vars[(load_id, t)] = 0  # Forbidden outside allowed window
 
+        # 2. Battery Decision Variables
+        p_charge = {t: pulp.LpVariable(f"p_charge_h{t}", lowBound=0, upBound=battery_max_power_kw, cat=pulp.LpContinuous) for t in hours}
+        p_discharge = {t: pulp.LpVariable(f"p_discharge_h{t}", lowBound=0, upBound=battery_max_power_kw, cat=pulp.LpContinuous) for t in hours}
+        soc = {t: pulp.LpVariable(f"soc_h{t}", lowBound=battery_capacity_kwh * 0.1, upBound=battery_capacity_kwh * 0.95, cat=pulp.LpContinuous) for t in hours}
+
         # Peak Load Variable
         peak_load_var = pulp.LpVariable("Peak_Load_kW", lowBound=0, cat=pulp.LpContinuous)
         
         # Net Grid Demand Variables for each hour
         net_grid_vars = {t: pulp.LpVariable(f"net_grid_h{t}", lowBound=0, cat=pulp.LpContinuous) for t in hours}
         
-        # 1. Start Once Constraint for each load
+        # Start Once Constraint for each flexible load
         for load in flexible_loads:
             load_id = load['id']
             start_min = load['allowed_start']
@@ -67,7 +75,7 @@ class SmartDemandOptimizer:
                 f"start_once_{load_id}"
             )
             
-        # 2. Hourly Total Demand and Net Grid Constraints
+        # Flexible Load Hourly Demand Accumulation
         hourly_flexible_demand = {t: [] for t in hours}
         
         for load in flexible_loads:
@@ -80,7 +88,6 @@ class SmartDemandOptimizer:
                 start_max = start_min
                 
             for t in hours:
-                # Active at hour t if started at tau where t - duration + 1 <= tau <= t
                 active_tau_start = max(start_min, t - duration + 1)
                 active_tau_end = min(start_max, t)
                 
@@ -89,27 +96,31 @@ class SmartDemandOptimizer:
                     if active_vars:
                         hourly_flexible_demand[t].append(power * pulp.lpSum(active_vars))
 
+        # Battery Energy Conservation (SoC Transition) Constraints
+        initial_soc = battery_capacity_kwh * 0.3  # Start at 30% state of charge
         for t in hours:
-            # Baseline without flexible loads (assuming base_forecast has default unoptimized flexible loads removed or base building load)
-            # Base load = base_forecast[t]
-            flex_demand_t = pulp.lpSum(hourly_flexible_demand[t]) if hourly_flexible_demand[t] else 0
-            total_demand_t = base_forecast[t] + flex_demand_t
-            
-            # Net Grid Demand = max(0, total_demand_t - solar_forecast[t])
-            prob += (net_grid_vars[t] >= total_demand_t - solar_forecast[t], f"net_grid_lb_{t}")
-            
-            # Peak Demand Constraint
-            prob += (peak_load_var >= total_demand_t, f"peak_lb_{t}")
+            prev_soc = initial_soc if t == 0 else soc[t - 1]
+            prob += (
+                soc[t] == prev_soc + (p_charge[t] * battery_efficiency) - (p_discharge[t] / battery_efficiency),
+                f"battery_soc_balance_h{t}"
+            )
 
-        # 3. Objective Function Formulation
-        # Cost term
+        # Hourly Total Demand, Net Grid, and Peak Load Constraints
+        for t in hours:
+            flex_demand_t = pulp.lpSum(hourly_flexible_demand[t]) if hourly_flexible_demand[t] else 0
+            total_facility_demand = base_forecast[t] + flex_demand_t
+            
+            # Net Grid Draw = Total Demand + Battery Charge - Solar Gen - Battery Discharge
+            net_draw = total_facility_demand + p_charge[t] - solar_forecast[t] - p_discharge[t]
+            
+            prob += (net_grid_vars[t] >= net_draw, f"net_grid_lb_{t}")
+            prob += (peak_load_var >= net_draw, f"peak_lb_{t}")
+
+        # Multi-Objective Function
         energy_cost_term = pulp.lpSum([net_grid_vars[t] * tariff_rates[t] for t in hours])
-        # Daily prorated peak demand penalty (Monthly rate / 30)
         peak_penalty_term = peak_load_var * (demand_charge_per_kw / 30.0)
-        # Carbon emissions term
         carbon_term = pulp.lpSum([net_grid_vars[t] * carbon_factor_kg_kwh for t in hours])
         
-        # Scale terms for balanced multi-objective optimization
         total_obj = (
             weight_cost * (energy_cost_term / 100.0) +
             weight_peak * (peak_penalty_term / 10.0) +
@@ -117,11 +128,11 @@ class SmartDemandOptimizer:
         )
         prob += total_obj, "Weighted_Multi_Objective"
 
-        # Solve MILP
+        # Solve MILP using CBC
         solver = pulp.PULP_CBC_CMD(msg=False)
-        solver_status = prob.solve(solver)
+        prob.solve(solver)
 
-        # Process Results
+        # Extract Solved Schedules
         proposed_schedule = []
         proposed_load_curve = list(base_forecast)
         
@@ -132,22 +143,18 @@ class SmartDemandOptimizer:
             default_start = load.get('default_start', load['allowed_start'])
             
             opt_start = default_start
-            # Extract solved start time
             for t in hours:
                 var = x_vars.get((load_id, t))
                 if isinstance(var, pulp.LpVariable) and var.varValue and var.varValue > 0.5:
                     opt_start = t
                     break
                     
-            # Determine if approved by user
             is_approved = load_id in approved_load_ids
             effective_start = opt_start if is_approved else default_start
             
-            # Add to proposed load curve if approved
             for h in range(effective_start, min(24, effective_start + duration)):
                 proposed_load_curve[h] += power
 
-            # Generate plain-language rationale
             reason = self._generate_explanation(
                 load_name=load['name'],
                 original_start=default_start,
@@ -174,22 +181,43 @@ class SmartDemandOptimizer:
                 "reason": reason
             })
 
-        # Calculate metrics for baseline vs proposed
+        # Extract Battery Charge / Discharge / SoC Series
+        battery_series = []
+        for t in hours:
+            c = round(float(p_charge[t].varValue or 0.0), 2)
+            d = round(float(p_discharge[t].varValue or 0.0), 2)
+            s = round(float(soc[t].varValue or 0.0), 2)
+            soc_pct = round((s / battery_capacity_kwh) * 100.0, 1)
+            battery_series.append({
+                "hour": t,
+                "charge_kw": c,
+                "discharge_kw": d,
+                "soc_kwh": s,
+                "soc_pct": soc_pct
+            })
+
+        # Baseline Load Curve calculation
         baseline_load_curve = list(base_forecast)
         for load in flexible_loads:
             def_start = load.get('default_start', load['allowed_start'])
             for h in range(def_start, min(24, def_start + load['duration_hours'])):
                 baseline_load_curve[h] += load['power_kw']
 
+        # Apply battery impact on final net grid curves
+        final_proposed_net_curve = [
+            round(max(0.0, proposed_load_curve[t] + battery_series[t]["charge_kw"] - solar_forecast[t] - battery_series[t]["discharge_kw"]), 2)
+            for t in hours
+        ]
+
         baseline_peak_kw = max(baseline_load_curve)
-        proposed_peak_kw = max(proposed_load_curve)
+        proposed_peak_kw = max(final_proposed_net_curve)
         
         # Calculate Costs and Carbon
         baseline_cost = sum(max(0, baseline_load_curve[t] - solar_forecast[t]) * tariff_rates[t] for t in hours)
-        proposed_cost = sum(max(0, proposed_load_curve[t] - solar_forecast[t]) * tariff_rates[t] for t in hours)
+        proposed_cost = sum(final_proposed_net_curve[t] * tariff_rates[t] for t in hours)
         
         baseline_carbon = sum(max(0, baseline_load_curve[t] - solar_forecast[t]) * carbon_factor_kg_kwh for t in hours)
-        proposed_carbon = sum(max(0, proposed_load_curve[t] - solar_forecast[t]) * carbon_factor_kg_kwh for t in hours)
+        proposed_carbon = sum(final_proposed_net_curve[t] * carbon_factor_kg_kwh for t in hours)
 
         daily_cost_savings = max(0.0, baseline_cost - proposed_cost)
         monthly_cost_savings = daily_cost_savings * 30.0 + max(0.0, (baseline_peak_kw - proposed_peak_kw) * demand_charge_per_kw)
@@ -199,6 +227,8 @@ class SmartDemandOptimizer:
             "proposed_schedule": proposed_schedule,
             "baseline_load_curve": [round(v, 2) for v in baseline_load_curve],
             "proposed_load_curve": [round(v, 2) for v in proposed_load_curve],
+            "final_proposed_net_curve": final_proposed_net_curve,
+            "battery_series": battery_series,
             "kpis": {
                 "baseline_peak_kw": round(baseline_peak_kw, 2),
                 "proposed_peak_kw": round(proposed_peak_kw, 2),
@@ -223,7 +253,6 @@ class SmartDemandOptimizer:
         allowed_start: int,
         allowed_end: int
     ) -> str:
-        """Generate plain-language explanation for why a load shift was recommended."""
         if original_start == proposed_start:
             return f"Optimal schedule: Currently operating at best time window ({original_start:02d}:00)."
             
