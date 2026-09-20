@@ -28,14 +28,9 @@ export default function Navbar({
                 <Zap className="w-5 h-5 text-gray-950 fill-gray-950" />
               </div>
               <div>
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-xl font-black tracking-tight text-[var(--text-primary)]">
-                    GridSathi
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
-                    PS-19
-                  </span>
-                </div>
+                <span className="text-xl font-black tracking-tight text-[var(--text-primary)]">
+                  GridSathi
+                </span>
                 <span className="block text-[10px] text-[var(--text-muted)] tracking-wider font-mono uppercase">
                   AI Demand & Solar Scheduler
                 </span>
